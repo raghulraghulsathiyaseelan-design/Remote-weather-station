@@ -1,0 +1,70 @@
+#include <DHT.h>
+#include <WiFi.h>
+#include "ThingSpeak.h"
+
+// === Sensor Pins ===
+#define DHTPIN 4          // DHT11/DHT22 data pin
+#define DHTTYPE DHT11
+#define RAIN_PIN 34       // Rain sensor digital pin
+#define WIND_PIN 35       // Wind speed sensor analog pin
+
+DHT dht(DHTPIN, DHTTYPE);
+
+// === Wi-Fi & ThingSpeak ===
+const char* ssid = "YourWiFiName";
+const char* password = "YourWiFiPassword";
+WiFiClient client;
+unsigned long myChannelNumber = YOUR_CHANNEL_ID;
+const char * myWriteAPIKey = "YOUR_API_KEY";
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  pinMode(RAIN_PIN, INPUT);
+  pinMode(WIND_PIN, INPUT);
+
+  // Connect Wi-Fi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected");
+
+  ThingSpeak.begin(client);
+}
+
+void loop() {
+  // Read DHT sensor
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+
+  // Read rain sensor
+  int rainStatus = digitalRead(RAIN_PIN);  // 0 = raining, 1 = no rain
+
+  // Read wind sensor (analog value, adjust as per your sensor)
+  int windAnalog = analogRead(WIND_PIN);
+  float windSpeed = windAnalog * (5.0 / 1023.0); // Convert to approximate voltage
+
+  // Print to Serial Monitor
+  Serial.print("Temp: "); Serial.print(temperature); Serial.print(" C, ");
+  Serial.print("Humidity: "); Serial.print(humidity); Serial.print(" %, ");
+  Serial.print("Rain: "); Serial.print(rainStatus == 0 ? "Yes" : "No"); Serial.print(", ");
+  Serial.print("Wind Voltage: "); Serial.println(windSpeed);
+
+  // Send to ThingSpeak
+  ThingSpeak.setField(1, temperature);
+  ThingSpeak.setField(2, humidity);
+  ThingSpeak.setField(3, rainStatus);
+  ThingSpeak.setField(4, windSpeed);
+
+  int x = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+  if (x == 200) {
+    Serial.println("Data sent successfully");
+  } else {
+    Serial.println("Error sending data");
+  }
+
+  delay(15000); // ThingSpeak update limit
+}
